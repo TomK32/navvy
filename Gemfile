@@ -24,4 +24,8 @@ group :mongoid do
   gem 'tzinfo'
 end
 
+group :couchrest_model do
+  gem 'couchrest_model', '1.0.1'
+end
+
 gemspec
