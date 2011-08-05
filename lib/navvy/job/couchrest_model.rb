@@ -1,30 +1,38 @@
-require 'dm-core'
-require 'dm-migrations'
+require 'couchrest_model'
 
 module Navvy
-  class Job
-    include DataMapper::Resource
+  class Job < CouchRest::Model::Base
+    
+    use_database CouchRest.database!('jobs')
 
-    property :id,            Serial
     property :object,        String
     property :method_name,   String
     property :arguments,     String
     property :priority,      Integer, :default => 0
     property :return,        String
     property :exception,     String
+    property :backtrace,     String
     property :parent_id,     Integer
     property :created_at,    Time
     property :run_at,        Time
     property :started_at,    Time
     property :completed_at,  Time
     property :failed_at,     Time
+    
+    view_by :completed_at
+    view_by :parent_id
+    view_by :next, :decending => true,
+      :map => "function(doc) {
+        if ((doc['couchrest-type'] == 'Navvy::Job') && (doc['failed_at'] == null) && (doc['completed_at'] == null)) {
+          emit([doc['run_at'],doc['priority'],doc['created_at']], null);
+        }
+      }"
 
     ##
     # Add a job to the job queue.
     #
     # @param [Object] object the object you want to run a method from
-    # @param [Symbol, String] method_name the name of the method you want to
-    # run
+    # @param [Symbol, String] method_name the name of the method you want to run
     # @param [*] arguments optional arguments you want to pass to the method
     #
     # @return [Job, false] created Job or false if failed
@@ -33,17 +41,17 @@ module Navvy
       options = {}
       if args.last.is_a?(Hash)
         options = args.last.delete(:job_options) || {}
-        args.pop if args.last.empty?
+         args.pop if args.last.empty?
       end
 
-      new_job = Job.create(
+      create(
         :object =>      object.to_s,
         :method_name => method_name.to_s,
         :arguments =>   args.to_yaml,
         :priority =>    options[:priority] || 0,
         :parent_id =>   options[:parent_id],
-        :run_at =>      options[:run_at] || Time.now,
-        :created_at =>  Time.now
+        :run_at =>      options[:run_at] || Time.now.utc,
+        :created_at =>  Time.now.utc
       )
     end
 
@@ -59,13 +67,7 @@ module Navvy
     # jobs were found.
 
     def self.next(limit = self.limit)
-      all(
-        :failed_at =>     nil,
-        :completed_at =>  nil,
-        :run_at.lte =>    Time.now,
-        :order =>         [ :priority.desc, :created_at.asc ],
-        :limit =>         limit
-      )
+      by_next(:startkey => ['0','0','0'], :endkey => [Time.now.utc,'Z','Z'])
     end
 
     ##
@@ -76,20 +78,11 @@ module Navvy
     # @return [true, false] delete_all the result of the delete_all call
 
     def self.cleanup
-      if keep.is_a? Fixnum
-        all(:completed_at.lte => (Time.now - keep)).destroy
-      else
-        all(:completed_at.not => nil ).destroy unless keep?
-      end
-    end
-
-    ##
-    # Deletes all jobs.
-    #
-    # @return [true, false] deleted?
-
-    def self.delete_all
-      Navvy::Job.destroy
+      # if keep.is_a? Fixnum
+      #   by_completed_at(:startkey => '0', :startkey => keep.ago.utc).each {|d|d.destroy}
+      # else
+      #   by_completed_at(:startkey => '0', :startkey => 'Z').each {|d|d.destroy} unless keep?
+      # end
     end
 
     ##
@@ -99,7 +92,9 @@ module Navvy
     # update_attributes call
 
     def started
-      update(:started_at =>  Time.now)
+      update_attributes({
+        :started_at =>  Time.now.utc
+      })
     end
 
     ##
@@ -112,28 +107,28 @@ module Navvy
     # update_attributes call
 
     def completed(return_value = nil)
-      update(
-        :completed_at =>  Time.now,
+      update_attributes({
+        :completed_at =>  Time.now.utc,
         :return =>        return_value
-      )
+      })
     end
 
     ##
     # Mark the job as failed. Will set failed_at to the current time and
     # optionally add the exception message if provided. Also, it will retry
-    # the job unless max_attempts has been reached or retryable is false.
+    # the job unless max_attempts has been reached.
     #
     # @param [String] exception the exception message you want to store.
-    # @param [true, false] whether or not to attempt to retry the job
     #
     # @return [true, false] update_attributes the result of the
     # update_attributes call
 
-    def failed(message = nil, retryable = true)
+    def failed(message = nil, backtrace = nil, retryable = true)
       self.retry unless !retryable || times_failed >= self.class.max_attempts
-      update(
-        :failed_at => Time.now,
-        :exception => message
+      update_attributes(
+        :failed_at => Time.now.utc,
+        :exception => message,
+        :backtrace => backtrace.try(:join, "\n")
       )
     end
 
@@ -145,8 +140,14 @@ module Navvy
 
     def times_failed
       i = parent_id || id
-      klass = self.class
-      (klass.all(:failed_at.not => nil) & (klass.all(:id => i) | klass.all(:parent_id => i))).count
+      
+      # get count matching parent
+      count = self.class.by_parent_id(:key => i).length
+      # check id
+      item = self.class.get(i)
+      count += 1 if item && item.failed_at.present?
+
+      count
     end
   end
 end
