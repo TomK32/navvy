@@ -3,7 +3,7 @@ require 'couchrest_model'
 module Navvy
   class Job < CouchRest::Model::Base
     
-    use_database CouchRest.database('jobs')
+    use_database CouchRest.database!('jobs')
 
     property :object,        String
     property :method_name,   String
@@ -11,6 +11,7 @@ module Navvy
     property :priority,      Integer, :default => 0
     property :return,        String
     property :exception,     String
+    property :backtrace,     String
     property :parent_id,     Integer
     property :created_at,    Time
     property :run_at,        Time
@@ -66,7 +67,7 @@ module Navvy
     # jobs were found.
 
     def self.next(limit = self.limit)
-      by_next(:startkey => [Time.now.utc,'Z','Z'], :endkey => ['0','0','0'])
+      by_next(:startkey => ['0','0','0'], :endkey => [Time.now.utc,'Z','Z'])
     end
 
     ##
@@ -77,11 +78,11 @@ module Navvy
     # @return [true, false] delete_all the result of the delete_all call
 
     def self.cleanup
-      if keep.is_a? Fixnum
-        by_completed_at(:startkey => '0', :startkey => keep.ago.utc).each {|d|d.destroy}
-      else
-        by_completed_at(:startkey => '0', :startkey => 'Z').each {|d|d.destroy} unless keep?
-      end
+      # if keep.is_a? Fixnum
+      #   by_completed_at(:startkey => '0', :startkey => keep.ago.utc).each {|d|d.destroy}
+      # else
+      #   by_completed_at(:startkey => '0', :startkey => 'Z').each {|d|d.destroy} unless keep?
+      # end
     end
 
     ##
@@ -122,11 +123,12 @@ module Navvy
     # @return [true, false] update_attributes the result of the
     # update_attributes call
 
-    def failed(message = nil)
-      self.retry unless times_failed >= self.class.max_attempts
+    def failed(message = nil, backtrace = nil, retryable = true)
+      self.retry unless !retryable || times_failed >= self.class.max_attempts
       update_attributes(
         :failed_at => Time.now.utc,
-        :exception => message
+        :exception => message,
+        :backtrace => backtrace.try(:join, "\n")
       )
     end
 
@@ -140,9 +142,10 @@ module Navvy
       i = parent_id || id
       
       # get count matching parent
-      count = by_parent_id(:key => i).length
+      count = self.class.by_parent_id(:key => i).length
       # check id
-      count += 1 if item = get(i) && item.failed_at.present?
+      item = self.class.get(i)
+      count += 1 if item && item.failed_at.present?
 
       count
     end

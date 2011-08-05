@@ -158,6 +158,7 @@ module Navvy
     # @return [array] arguments
 
     def args
+      puts arguments.inspect
       arguments.is_a?(Array) ? arguments : YAML.load(arguments)
     end
 
