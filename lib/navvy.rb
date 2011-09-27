@@ -1,4 +1,5 @@
 require 'psych'
+require 'yaml'
 require 'navvy/worker'
 require 'navvy/logger'
 require 'navvy/configuration'
