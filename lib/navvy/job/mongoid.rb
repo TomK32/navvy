@@ -18,8 +18,8 @@ module Navvy
     field :completed_at,  :type => Time
     field :failed_at,     :type => Time
 
-    index [[:priority, Mongo::DESCENDING]]
-    index [[:created_at, Mongo::ASCENDING]]
+    index({priority: -1})
+    index({created_at: 1})
 
     ##
     # Add a job to the job queue.
