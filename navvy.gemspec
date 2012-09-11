@@ -14,7 +14,6 @@ Gem::Specification.new do |gem|
 
   gem.add_development_dependency('rake')
   gem.add_development_dependency('sqlite3-ruby')
-  gem.add_development_dependency('bson_ext')
   gem.add_development_dependency('rspec', ["~> 2.0"])
   gem.add_development_dependency('yard', [">= 0.5.2"])
   gem.add_development_dependency('timecop', [">= 0.3.5"])

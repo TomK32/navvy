@@ -19,7 +19,7 @@ group :sequel do
 end
 
 group :mongoid do
-  gem 'mongoid', '>= 2.0.beta'
+  gem 'mongoid', '~> 3.0'
   gem 'builder'
   gem 'tzinfo'
 end
