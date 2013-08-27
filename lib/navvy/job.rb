@@ -84,6 +84,7 @@ module Navvy
     def run
       begin
         started
+        args[:navvy_job] = self
         result = constantize(object).send(method_name, *args).inspect
         Navvy::Job.keep? ? completed(result) : destroy
         result
@@ -158,7 +159,6 @@ module Navvy
     # @return [array] arguments
 
     def args
-      puts arguments.inspect
       arguments.is_a?(Array) ? arguments : YAML.load(arguments)
     end
 

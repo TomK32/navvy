@@ -17,6 +17,7 @@ module Navvy
     field :started_at,    :type => Time
     field :completed_at,  :type => Time
     field :failed_at,     :type => Time
+    field :progress,      :type => Hash
 
     index({priority: -1})
     index({created_at: 1})
