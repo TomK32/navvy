@@ -84,7 +84,9 @@ module Navvy
     def run
       begin
         started
-        args[:navvy_job] = self
+        if args.is_a?(Array) && args[0] && args[0].is_a?(Hash)
+          args[0][:navvy_job] = self
+        end
         result = constantize(object).send(method_name, *args).inspect
         Navvy::Job.keep? ? completed(result) : destroy
         result
