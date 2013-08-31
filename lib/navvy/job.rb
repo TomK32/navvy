@@ -91,7 +91,7 @@ module Navvy
       rescue NoRetryException => exception
         failed(exception.message, nil, false)
       rescue Exception => exception
-        failed(exception.message, exception.backtrace)
+        failed("%s %s" % [exception.message,  exception.backtrace])
       end
     end
 
