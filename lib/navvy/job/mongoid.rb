@@ -11,6 +11,7 @@ module Navvy
     field :priority,      :type => Integer, :default => 0
     field :return,        :type => String
     field :exception,     :type => String
+    field :exception,     :type => String
     field :parent_id,     :type => BSON::ObjectId
     field :created_at,    :type => Time
     field :run_at,        :type => Time
@@ -118,7 +119,8 @@ module Navvy
 
     def failed(message = nil, retryable = true)
       self.retry unless !retryable || times_failed >= self.class.max_attempts
-      update_attributes(:failed_at => Time.now, :exception => message)
+      backtrace = retryable.is_a?(Array) ? retryable.join("\n") : nil
+      update_attributes(:failed_at => Time.now, :exception => message, :exception_backtrace => backtrace)
     end
 
     ##
